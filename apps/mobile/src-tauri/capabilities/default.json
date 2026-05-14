@@ -3,6 +3,7 @@
   "identifier": "default",
   "description": "Default capabilities for Linguaflow",
   "windows": ["main"],
+  "platforms": ["macOS", "windows", "linux", "android", "iOS"],
   "permissions": [
     "core:default"
   ]
