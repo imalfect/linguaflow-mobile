@@ -1,1 +1,37 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build artifacts
+dist/
+build/
+out/
+.next/
+.output/
+.sst/
+.open-next/
+
+# Tauri
+**/src-tauri/target/
+**/src-tauri/gen/
+**/src-tauri/WixTools/
+
+# Logs
+*.log
+npm-debug.log*
+bun-debug.log*
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Misc
+.DS_Store
+.vscode/
+.idea/
+*.tsbuildinfo
+
+# Old project (kept for reference but ignored from new builds)
 old-linguaflow/

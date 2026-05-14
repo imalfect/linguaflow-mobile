@@ -1,0 +1,26 @@
+{
+  "name": "@linguaflow/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --hot src/local-server.ts",
+    "dev:sst": "sst dev",
+    "deploy": "sst deploy --stage production",
+    "deploy:dev": "sst deploy --stage dev",
+    "remove": "sst remove --stage production",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@linguaflow/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.45.4",
+    "jose": "^5.9.6",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.7.5",
+    "sst": "^4.14.1",
+    "typescript": "^5.6.3"
+  }
+}

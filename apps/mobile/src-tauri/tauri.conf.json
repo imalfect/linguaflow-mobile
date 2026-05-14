@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Linguaflow",
+  "version": "0.1.0",
+  "identifier": "dev.imal.linguaflow",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Linguaflow",
+        "width": 414,
+        "height": 896,
+        "minWidth": 360,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Education",
+    "shortDescription": "Trener akcentu i mowy AI",
+    "longDescription": "Linguaflow uczy języków z naciskiem na wymowę i akcent. Trening prowadzony przez AI z oceną fonemu.",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "android": {
+      "minSdkVersion": 24
+    },
+    "iOS": {
+      "developmentTeam": "2ZR6D5K3TR",
+      "minimumSystemVersion": "13.0"
+    }
+  }
+}
