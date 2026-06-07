@@ -88,47 +88,35 @@ export function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function assessPronunciation(opts: {
   audioWav: ArrayBuffer;
   targetSentence: string;
   language: string;
   accent?: string;
 }): Promise<PronunciationAssessmentResponse> {
-  const headers: Record<string, string> = {
-    "Content-Type": "audio/wav",
-    "X-Target-Sentence": encodeURIComponent(opts.targetSentence),
-    "X-Language": opts.language,
-    ...(await authHeader()),
+  // WKWebView kills raw binary-body uploads at the network layer AND poisons
+  // the reused connection for subsequent requests. Base64 JSON is structurally
+  // identical to the JSON POSTs that demonstrably work everywhere, so it is
+  // the only path. (~33% size overhead on ~80KB audio is negligible.)
+  const payload = {
+    audioBase64: arrayBufferToBase64(opts.audioWav),
+    targetSentence: opts.targetSentence,
+    language: opts.language,
+    accent: opts.accent,
   };
-  if (opts.accent) headers["X-Accent"] = opts.accent;
-
-  let res: Response;
   try {
-    res = await loggedFetch("/pronunciation/assess", {
-      method: "POST",
-      headers,
-      body: opts.audioWav,
-    });
+    return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", payload);
   } catch (err) {
-    // Some webviews (WKWebView in particular) kill binary-body uploads at the
-    // network layer. Retry the same endpoint as base64 JSON — plain JSON POSTs
-    // demonstrably work everywhere.
+    // One delayed retry: gives WebKit time to drop a dead pooled connection.
     if (err instanceof TypeError) {
-      dbg("warn", "[api] binary upload failed, retrying as base64 JSON…");
-      return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", {
-        audioBase64: arrayBufferToBase64(opts.audioWav),
-        targetSentence: opts.targetSentence,
-        language: opts.language,
-        accent: opts.accent,
-      });
+      dbg("warn", "[api] assess upload failed at network layer, retrying once in 1s…");
+      await sleep(1000);
+      return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", payload);
     }
     throw err;
   }
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new ApiError(`assess failed: ${res.status} ${text}`, res.status);
-  }
-  return (await res.json()) as PronunciationAssessmentResponse;
 }
 
 // ---------------------------------------------------------------------------

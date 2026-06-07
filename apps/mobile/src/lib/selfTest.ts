@@ -57,7 +57,23 @@ export async function runSelfTest(): Promise<void> {
     return `HTTP ${r.status}`;
   });
 
-  await step("4. POST 1KB binary + X-headers + auth (4xx = reached server, OK)", async () => {
+  // base64 JSON BEFORE any binary attempt — binary uploads poison the pooled
+  // connection in WKWebView, which would corrupt this measurement.
+  await step("4. POST base64 JSON → assess, CLEAN connection (4xx/5xx = reached server, OK)", async () => {
+    const r = await fetch(`${API_URL}/pronunciation/assess`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...auth },
+      body: JSON.stringify({
+        audioBase64: arrayBufferToBase64(new ArrayBuffer(1024)),
+        targetSentence: "test",
+        language: "en",
+        accent: "us",
+      }),
+    });
+    return `HTTP ${r.status}`;
+  });
+
+  await step("5. POST 1KB binary + X-headers + auth (4xx = reached server, OK)", async () => {
     const r = await fetch(`${API_URL}/pronunciation/assess`, {
       method: "POST",
       headers: {
@@ -72,22 +88,7 @@ export async function runSelfTest(): Promise<void> {
     return `HTTP ${r.status}`;
   });
 
-  await step("5. POST 64KB binary + X-headers + auth", async () => {
-    const r = await fetch(`${API_URL}/pronunciation/assess`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "audio/wav",
-        "X-Target-Sentence": encodeURIComponent("test"),
-        "X-Language": "en",
-        "X-Accent": "us",
-        ...auth,
-      },
-      body: new ArrayBuffer(64 * 1024),
-    });
-    return `HTTP ${r.status}`;
-  });
-
-  await step("6. POST base64 JSON fallback (4xx/5xx = reached server, OK)", async () => {
+  await step("6. POST base64 JSON → assess AFTER binary (poisoned-connection probe)", async () => {
     const r = await fetch(`${API_URL}/pronunciation/assess`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...auth },
@@ -101,5 +102,5 @@ export async function runSelfTest(): Promise<void> {
     return `HTTP ${r.status}`;
   });
 
-  dbg("info", "[selftest] === done — every step that says ✗ TypeError is the broken dimension ===");
+  dbg("info", "[selftest] === done — ✗ TypeError marks the broken dimension ===");
 }
