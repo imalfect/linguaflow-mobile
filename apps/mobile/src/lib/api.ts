@@ -90,33 +90,82 @@ export function arrayBufferToBase64(buf: ArrayBuffer): string {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function makeUploadId(): string {
+  return `up-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// Uploads the base64 audio in small JSON pieces. Tiny JSON POSTs are the only
+// request shape that works on every network we've observed, so this is the
+// most defensive transport available.
+async function assessChunked(
+  audioB64: string,
+  opts: { targetSentence: string; language: string; accent?: string },
+  chunkChars: number,
+): Promise<PronunciationAssessmentResponse> {
+  const uploadId = makeUploadId();
+  const total = Math.ceil(audioB64.length / chunkChars);
+  dbg("info", `[api] chunked upload: ${total} parts × ${chunkChars} chars (id ${uploadId})`);
+
+  const CONCURRENCY = 4;
+  for (let batch = 0; batch < total; batch += CONCURRENCY) {
+    const jobs: Promise<unknown>[] = [];
+    for (let seq = batch; seq < Math.min(batch + CONCURRENCY, total); seq++) {
+      jobs.push(
+        postJson("/pronunciation/assess-chunk", {
+          uploadId,
+          seq,
+          total,
+          dataB64: audioB64.slice(seq * chunkChars, (seq + 1) * chunkChars),
+        }),
+      );
+    }
+    await Promise.all(jobs);
+  }
+
+  return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess-finish", {
+    uploadId,
+    targetSentence: opts.targetSentence,
+    language: opts.language,
+    accent: opts.accent,
+  });
+}
+
 export async function assessPronunciation(opts: {
   audioWav: ArrayBuffer;
   targetSentence: string;
   language: string;
   accent?: string;
 }): Promise<PronunciationAssessmentResponse> {
-  // WKWebView kills raw binary-body uploads at the network layer AND poisons
-  // the reused connection for subsequent requests. Base64 JSON is structurally
-  // identical to the JSON POSTs that demonstrably work everywhere, so it is
-  // the only path. (~33% size overhead on ~80KB audio is negligible.)
-  const payload = {
-    audioBase64: arrayBufferToBase64(opts.audioWav),
+  const audioB64 = arrayBufferToBase64(opts.audioWav);
+  const meta = {
     targetSentence: opts.targetSentence,
     language: opts.language,
     accent: opts.accent,
   };
+
+  // Rung 1: single base64 JSON request (fast path on healthy networks).
   try {
-    return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", payload);
+    return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", {
+      audioBase64: audioB64,
+      ...meta,
+    });
   } catch (err) {
-    // One delayed retry: gives WebKit time to drop a dead pooled connection.
-    if (err instanceof TypeError) {
-      dbg("warn", "[api] assess upload failed at network layer, retrying once in 1s…");
-      await sleep(1000);
-      return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", payload);
-    }
-    throw err;
+    if (!(err instanceof TypeError)) throw err;
+    dbg("warn", "[api] direct upload failed at network layer → chunked 4KB");
   }
+
+  // Rung 2: chunked, 4KB pieces.
+  try {
+    return await assessChunked(audioB64, meta, 4 * 1024);
+  } catch (err) {
+    if (!(err instanceof TypeError)) throw err;
+    dbg("warn", "[api] 4KB chunks failed → chunked 700B (sub-MTU)");
+  }
+
+  // Rung 3: chunked, 700-char pieces — each request fits in a single network
+  // packet even with headers. If THIS fails, the network blocks the host.
+  await sleep(500);
+  return await assessChunked(audioB64, meta, 700);
 }
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from "
 
 import { handler as pronTask } from "./functions/pronunciation/task.js";
 import { handler as pronAssess } from "./functions/pronunciation/assess.js";
+import { chunkHandler as pronAssessChunk, finishHandler as pronAssessFinish } from "./functions/pronunciation/assess-chunked.js";
 import { handler as pronFeedback } from "./functions/pronunciation/feedback.js";
 import { handler as levelQuestion } from "./functions/level-test/question.js";
 import { handler as levelEvaluate } from "./functions/level-test/evaluate.js";
@@ -21,6 +22,8 @@ type Handler = (event: APIGatewayProxyEventV2) => Promise<APIGatewayProxyStructu
 const ROUTES: Record<string, Handler> = {
   "POST /pronunciation/task": pronTask,
   "POST /pronunciation/assess": pronAssess,
+  "POST /pronunciation/assess-chunk": pronAssessChunk,
+  "POST /pronunciation/assess-finish": pronAssessFinish,
   "POST /pronunciation/feedback": pronFeedback,
   "POST /level-test/question": levelQuestion,
   "POST /level-test/evaluate": levelEvaluate,
