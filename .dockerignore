@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/.sst
+**/src-tauri/target
+**/src-tauri/gen
+old-linguaflow
+docs
+.git
+.env
+.env.*
+*.log
+.DS_Store

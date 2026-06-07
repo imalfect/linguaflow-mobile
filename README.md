@@ -149,6 +149,21 @@ Output contains the API Gateway URL, e.g. `https://xxxxxxxxxx.execute-api.eu-cen
 
 > **Note:** SST 4 internally runs Pulumi via Node. The packaged `@grpc/grpc-js` has serialization issues on Node 25/26 — pin Node 22 LTS on `PATH` for the deploy.
 
+#### Step 6 (alternative) — Self-host the backend with Docker
+
+Instead of AWS Lambda, the same handlers can run on any VPS via Docker Compose (the repo ships an HTTP wrapper around the Lambda functions plus an nginx reverse proxy):
+
+```bash
+cp .env.example .env         # fill in the same keys as above
+# set API_DOMAIN=api.your-domain.com in .env
+docker compose up -d --build
+```
+
+- nginx listens on port 80 (`NGINX_PORT` overrides) and proxies to the API container; requests with an unknown `Host` are dropped.
+- HTTPS is expected to terminate at Cloudflare — point a proxied (orange-cloud) A record at the VPS and set Cloudflare SSL mode to *Flexible* (or *Full* if you later add origin certs).
+- Set `VITE_API_URL=https://api.your-domain.com` in `.env` before building the APK.
+- Health check: `curl https://api.your-domain.com/health`.
+
 #### Step 7 — Build the Android APK
 
 ```bash
