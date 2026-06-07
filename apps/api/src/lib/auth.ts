@@ -28,7 +28,15 @@ export async function requireUser(event: APIGatewayProxyEventV2): Promise<{ user
     },
   });
 
-  if (res.status === 401) throw new HttpError("Invalid or expired token", 401);
+  // GoTrue returns 403 (not 401) for invalid/expired tokens. Map EVERY 4xx to
+  // our own 401: clients must re-authenticate. Never emit 5xx for bad tokens —
+  // Cloudflare replaces origin 5xx with its own CORS-less error page, which
+  // webview fetch() turns into an opaque "Load failed".
+  if (res.status >= 400 && res.status < 500) {
+    const detail = await res.text().catch(() => "");
+    console.warn(`Auth rejected: supabase ${res.status} ${detail.slice(0, 200)}`);
+    throw new HttpError("Invalid or expired token", 401);
+  }
   if (!res.ok) {
     throw new HttpError(`Auth check failed: ${res.status}`, 502);
   }

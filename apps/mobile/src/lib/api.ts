@@ -48,14 +48,36 @@ async function loggedFetch(path: string, init: RequestInit): Promise<Response> {
 }
 
 async function postJson<T>(path: string, body: unknown, requireAuth = true): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (requireAuth) Object.assign(headers, await authHeader());
+  const send = async (): Promise<Response> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (requireAuth) Object.assign(headers, await authHeader());
+    return await loggedFetch(path, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  };
 
-  const res = await loggedFetch(path, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let res = await send();
+
+  // Stale session: force-refresh the token and retry once. If the refresh
+  // doesn't help, sign out — the router bounces to the welcome screen.
+  if (res.status === 401 && requireAuth) {
+    dbg("warn", `[api] ${path} → 401, refreshing session and retrying…`);
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      dbg("error", "[api] session refresh failed — signing out:", refreshError.message);
+      await supabase.auth.signOut();
+      throw new ApiError("Sesja wygasła. Zaloguj się ponownie.", 401);
+    }
+    res = await send();
+    if (res.status === 401) {
+      dbg("error", "[api] still 401 after refresh — signing out");
+      await supabase.auth.signOut();
+      throw new ApiError("Sesja wygasła. Zaloguj się ponownie.", 401);
+    }
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new ApiError(`${path} failed: ${res.status} ${text}`, res.status);
