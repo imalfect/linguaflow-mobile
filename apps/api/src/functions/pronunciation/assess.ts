@@ -1,24 +1,46 @@
 import { pronunciationAssessmentResponseSchema, getAzureLocale } from "@linguaflow/shared";
 import { requireUser } from "../../lib/auth.js";
-import { error, json, readBinaryBody, withErrorHandling, HttpError } from "../../lib/http.js";
+import { error, json, readBinaryBody, readJsonBody, withErrorHandling, HttpError } from "../../lib/http.js";
 import { assessPronunciation, type AzureNBest, type AzurePhoneme, type AzureWord } from "../../lib/azure.js";
 
-// Audio is sent as raw WAV bytes (16kHz 16-bit mono PCM) in the request body.
-// Headers control the target sentence + language.
+// Audio arrives either as raw WAV bytes (16kHz 16-bit mono PCM) with X-* headers,
+// or — fallback for webviews that choke on binary uploads — as JSON:
+//   { "audioBase64": "...", "targetSentence": "...", "language": "en", "accent": "us" }
 export const handler = withErrorHandling(async (event) => {
   await requireUser(event);
 
-  const targetSentence = event.headers?.["x-target-sentence"] ?? event.headers?.["X-Target-Sentence"];
-  const language = event.headers?.["x-language"] ?? event.headers?.["X-Language"] ?? "en";
-  const accent = event.headers?.["x-accent"] ?? event.headers?.["X-Accent"];
+  const contentType = (event.headers?.["content-type"] ?? event.headers?.["Content-Type"] ?? "").toLowerCase();
 
-  if (!targetSentence) return error("Missing X-Target-Sentence header", 400);
+  let audio: Buffer;
+  let decoded: string;
+  let language: string;
+  let accent: string | undefined;
 
-  const audio = readBinaryBody(event);
+  if (contentType.includes("application/json")) {
+    const body = readJsonBody<{
+      audioBase64?: string;
+      targetSentence?: string;
+      language?: string;
+      accent?: string;
+    }>(event);
+    if (!body.audioBase64) return error("Missing audioBase64", 400);
+    if (!body.targetSentence) return error("Missing targetSentence", 400);
+    audio = Buffer.from(body.audioBase64, "base64");
+    decoded = body.targetSentence;
+    language = body.language ?? "en";
+    accent = body.accent;
+  } else {
+    const targetSentence = event.headers?.["x-target-sentence"] ?? event.headers?.["X-Target-Sentence"];
+    language = event.headers?.["x-language"] ?? event.headers?.["X-Language"] ?? "en";
+    accent = event.headers?.["x-accent"] ?? event.headers?.["X-Accent"];
+    if (!targetSentence) return error("Missing X-Target-Sentence header", 400);
+    decoded = decodeURIComponent(targetSentence);
+    audio = readBinaryBody(event);
+  }
+
   if (audio.length === 0) return error("Empty audio body", 400);
   if (audio.length > 5 * 1024 * 1024) return error("Audio body too large (>5MB)", 413);
 
-  const decoded = decodeURIComponent(targetSentence);
   const locale = getAzureLocale(language, accent);
 
   const azure = await assessPronunciation({

@@ -78,6 +78,16 @@ export const generatePronunciationTask = (req: PronunciationTaskRequest) =>
 export const requestFeedback = (req: FeedbackRequest) =>
   postJson<FeedbackResponse>("/pronunciation/feedback", req);
 
+export function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
 export async function assessPronunciation(opts: {
   audioWav: ArrayBuffer;
   targetSentence: string;
@@ -92,11 +102,28 @@ export async function assessPronunciation(opts: {
   };
   if (opts.accent) headers["X-Accent"] = opts.accent;
 
-  const res = await loggedFetch("/pronunciation/assess", {
-    method: "POST",
-    headers,
-    body: opts.audioWav,
-  });
+  let res: Response;
+  try {
+    res = await loggedFetch("/pronunciation/assess", {
+      method: "POST",
+      headers,
+      body: opts.audioWav,
+    });
+  } catch (err) {
+    // Some webviews (WKWebView in particular) kill binary-body uploads at the
+    // network layer. Retry the same endpoint as base64 JSON — plain JSON POSTs
+    // demonstrably work everywhere.
+    if (err instanceof TypeError) {
+      dbg("warn", "[api] binary upload failed, retrying as base64 JSON…");
+      return await postJson<PronunciationAssessmentResponse>("/pronunciation/assess", {
+        audioBase64: arrayBufferToBase64(opts.audioWav),
+        targetSentence: opts.targetSentence,
+        language: opts.language,
+        accent: opts.accent,
+      });
+    }
+    throw err;
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new ApiError(`assess failed: ${res.status} ${text}`, res.status);

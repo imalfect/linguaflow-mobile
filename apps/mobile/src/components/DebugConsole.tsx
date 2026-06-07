@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Bug, Copy, Trash2, X } from "lucide-react";
+import { Bug, Copy, FlaskConical, Trash2, X } from "lucide-react";
 import { clearEntries, entriesAsText, getEntries, subscribe } from "../lib/debugLog";
+import { runSelfTest } from "../lib/selfTest";
 
 const LEVEL_COLOR: Record<string, string> = {
   log: "text-foreground/80",
@@ -50,6 +51,7 @@ export function DebugConsole() {
       <div className="flex items-center justify-between px-4 py-2 border-b border-surface_high">
         <span className="font-bold text-sm">Debug ({entries.length})</span>
         <div className="flex gap-2">
+          <IconBtn onClick={() => void runSelfTest()} label="Test API"><FlaskConical size={16} /></IconBtn>
           <IconBtn onClick={copyAll} label="Kopiuj"><Copy size={16} /></IconBtn>
           <IconBtn onClick={clearEntries} label="Wyczyść"><Trash2 size={16} /></IconBtn>
           <IconBtn onClick={() => setOpen(false)} label="Zamknij"><X size={16} /></IconBtn>
