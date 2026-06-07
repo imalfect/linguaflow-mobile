@@ -3,8 +3,9 @@ import { ZodError, type ZodTypeAny, type z } from "zod";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "*",
-  "Access-Control-Allow-Methods": "*",
+  // "*" does not cover Authorization per the fetch spec — list explicitly.
+  "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Target-Sentence, X-Language, X-Accent",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Content-Type": "application/json",
 };
 

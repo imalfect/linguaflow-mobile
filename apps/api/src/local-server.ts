@@ -39,11 +39,15 @@ function isBinaryContentType(ct: string | undefined): boolean {
   return BINARY_CONTENT_TYPES.some((t) => ct.toLowerCase().startsWith(t));
 }
 
+// "*" does not cover the Authorization header per the fetch spec (WebKit enforces
+// this), so list allowed headers explicitly.
+const ALLOWED_HEADERS = "Authorization, Content-Type, X-Target-Sentence, X-Language, X-Accent";
+
 function corsHeaders(): Record<string, string> {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "*",
-    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": ALLOWED_HEADERS,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -68,7 +72,14 @@ function pickHeaders(raw: http.IncomingHttpHeaders): Record<string, string> {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, corsHeaders());
+    // Echo whatever headers the browser asked for — most permissive, and
+    // avoids spec edge cases around the wildcard.
+    const requested = req.headers["access-control-request-headers"];
+    const headers = corsHeaders();
+    if (typeof requested === "string" && requested.length > 0) {
+      headers["Access-Control-Allow-Headers"] = requested;
+    }
+    res.writeHead(204, headers);
     res.end();
     return;
   }

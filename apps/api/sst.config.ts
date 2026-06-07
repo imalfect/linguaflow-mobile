@@ -1,4 +1,4 @@
-/// <reference path="./sst-env.d.ts" />
+/// <reference path="./.sst/platform/config.d.ts" />
 
 export default $config({
   app(input: { stage?: string } | undefined) {
@@ -27,7 +27,16 @@ export default $config({
     const api = new sst.aws.ApiGatewayV2("LinguaflowApi", {
       cors: {
         allowOrigins: ["*"],
-        allowHeaders: ["*"],
+        // NOTE: per the fetch spec the "*" wildcard does NOT cover the
+        // Authorization header — WebKit (iOS) enforces this and fails the
+        // preflight with a generic "Load failed". List everything explicitly.
+        allowHeaders: [
+          "authorization",
+          "content-type",
+          "x-target-sentence",
+          "x-language",
+          "x-accent",
+        ],
         allowMethods: ["*"],
       },
     });

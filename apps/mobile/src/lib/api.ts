@@ -11,20 +11,47 @@ import type {
   CefrLevel,
 } from "@linguaflow/shared";
 import { supabase } from "./supabase";
+import { dbg } from "./debugLog";
 
 const API_URL = import.meta.env.VITE_API_URL?.replace(/\/$/, "") ?? "";
 
 async function authHeader(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
+  if (!token) dbg("warn", "[api] no session token — request goes out unauthenticated");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function loggedFetch(path: string, init: RequestInit): Promise<Response> {
+  const t0 = Date.now();
+  const bodySize =
+    init.body instanceof ArrayBuffer
+      ? `${(init.body.byteLength / 1024).toFixed(1)}KB binary`
+      : typeof init.body === "string"
+        ? `${init.body.length}B json`
+        : "no body";
+  dbg("info", `[api] → POST ${path} (${bodySize})`);
+  try {
+    const res = await fetch(`${API_URL}${path}`, init);
+    dbg(res.ok ? "info" : "error", `[api] ← ${path} ${res.status} (${Date.now() - t0}ms)`);
+    return res;
+  } catch (err) {
+    // TypeError("Load failed") on WebKit = network/CORS layer, no HTTP response
+    dbg(
+      "error",
+      `[api] ✗ ${path} threw after ${Date.now() - t0}ms:`,
+      err,
+      "— network/CORS-level failure (no HTTP response). Check preflight, ATS, connectivity.",
+    );
+    throw err;
+  }
 }
 
 async function postJson<T>(path: string, body: unknown, requireAuth = true): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (requireAuth) Object.assign(headers, await authHeader());
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await loggedFetch(path, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
@@ -65,7 +92,7 @@ export async function assessPronunciation(opts: {
   };
   if (opts.accent) headers["X-Accent"] = opts.accent;
 
-  const res = await fetch(`${API_URL}/pronunciation/assess`, {
+  const res = await loggedFetch("/pronunciation/assess", {
     method: "POST",
     headers,
     body: opts.audioWav,
@@ -114,7 +141,7 @@ export async function ttsBlob(req: { text: string; language: string; accent?: st
     "Content-Type": "application/json",
     ...(await authHeader()),
   };
-  const res = await fetch(`${API_URL}/tts`, {
+  const res = await loggedFetch("/tts", {
     method: "POST",
     headers,
     body: JSON.stringify(req),

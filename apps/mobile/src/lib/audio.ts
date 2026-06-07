@@ -2,6 +2,8 @@
 // Uses ScriptProcessorNode (deprecated but universally supported in mobile webviews).
 // Output WAV is sent directly to Azure pronunciation REST API — no server-side conversion.
 
+import { dbg } from "./debugLog";
+
 const TARGET_RATE = 16000;
 
 export interface Recorder {
@@ -30,9 +32,11 @@ interface AudioProcessingEvent {
 
 export async function startRecorder(): Promise<Recorder> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    dbg("error", "[rec] navigator.mediaDevices.getUserMedia unavailable in this webview");
     throw new Error("Mikrofon nie jest dostępny w tym urządzeniu.");
   }
 
+  dbg("info", "[rec] requesting microphone…");
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,
@@ -40,6 +44,7 @@ export async function startRecorder(): Promise<Recorder> {
       channelCount: 1,
     },
   });
+  dbg("info", `[rec] mic granted, tracks: ${stream.getAudioTracks().map((t) => t.label || "unnamed").join(", ")}`);
 
   const AudioCtor = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
   if (!AudioCtor) throw new Error("AudioContext nie jest wspierany.");
@@ -86,7 +91,13 @@ export async function startRecorder(): Promise<Recorder> {
       await cleanup();
       const pcm = mergeChunks(chunks);
       const resampled = resampleLinear(pcm, sourceRate, TARGET_RATE);
-      return encodeWav(resampled, TARGET_RATE);
+      const wav = encodeWav(resampled, TARGET_RATE);
+      dbg(
+        "info",
+        `[rec] stopped: ${(pcm.length / sourceRate).toFixed(1)}s @ ${sourceRate}Hz → ${(wav.byteLength / 1024).toFixed(1)}KB WAV`,
+      );
+      if (pcm.length === 0) dbg("warn", "[rec] zero samples captured — mic muted or onaudioprocess never fired");
+      return wav;
     },
     cancel: () => {
       stopped = true;

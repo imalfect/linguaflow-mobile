@@ -14,6 +14,7 @@ import { ModuleDetail } from "./screens/ModuleDetail";
 import { Task } from "./screens/Task";
 import { Profile } from "./screens/Profile";
 import { BottomNav } from "./components/BottomNav";
+import { DebugConsole } from "./components/DebugConsole";
 import { Screen } from "./components/Screen";
 
 function ProtectedShell() {
@@ -72,6 +73,8 @@ export default function App() {
   }, [init]);
 
   return (
+    <>
+    <DebugConsole />
     <Routes>
       <Route
         path="/"
@@ -111,5 +114,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
